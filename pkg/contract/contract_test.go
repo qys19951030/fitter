@@ -785,3 +785,40 @@ func TestItemCountWithoutADeclaredTypeStillReportsANonList(t *testing.T) {
 	require.Len(t, got.Problems, 1)
 	assert.Equal(t, contract.KindTypeMismatch, got.Problems[0].Kind)
 }
+
+func TestLooselyNumericStringsAreNotSafeConversions(t *testing.T) {
+	for _, value := range []string{"NaN", "Inf", "+5", "0x10", "1,5"} {
+		t.Run(value, func(t *testing.T) {
+			s := specWith(t, map[string]any{"price": map[string]any{"type": "number"}})
+			got := s.Check(record(t, map[string]any{"price": value}))
+
+			require.Len(t, got.Problems, 1)
+			assert.Equal(t, contract.KindTypeMismatch, got.Problems[0].Kind)
+			assert.Equal(t, contract.SeverityDefect, got.Problems[0].Severity,
+				"%q must not be treated as a safe numeric conversion", value)
+			assert.Equal(t, contract.Unusable, got.Verdict)
+		})
+	}
+}
+
+func TestProperNumericStringsStillConvert(t *testing.T) {
+	for _, value := range []string{"5", "-5", "5.25", "1e3", "0"} {
+		t.Run(value, func(t *testing.T) {
+			s := specWith(t, map[string]any{"price": map[string]any{"type": "number"}})
+			got := s.Check(record(t, map[string]any{"price": value}))
+
+			require.Len(t, got.Problems, 1)
+			assert.Equal(t, contract.SeverityWarning, got.Problems[0].Severity)
+		})
+	}
+}
+
+func TestTrailingBytesAfterAValueAreADefect(t *testing.T) {
+	s := specWith(t, map[string]any{"price": map[string]any{"type": "number"}})
+	got := s.Check(map[string]json.RawMessage{"price": json.RawMessage(`5 6`)})
+
+	require.Len(t, got.Problems, 1)
+	assert.Equal(t, contract.KindTypeMismatch, got.Problems[0].Kind)
+	assert.Equal(t, contract.SeverityDefect, got.Problems[0].Severity)
+	assert.Equal(t, `5 6`, string(got.Problems[0].Raw))
+}

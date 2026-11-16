@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -443,6 +444,12 @@ func inspect(raw json.RawMessage) (jsonKind, any, error) {
 	if err := dec.Decode(&v); err != nil {
 		return "", nil, err
 	}
+	// Trailing bytes mean this was not a single JSON value; classifying the
+	// prefix would call a corrupt value well-formed.
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		return "", nil, fmt.Errorf("trailing data after JSON value")
+	}
 	switch v.(type) {
 	case nil:
 		return kindNull, v, nil
@@ -522,13 +529,27 @@ func parseNumberString(k jsonKind, v any) (json.Number, bool) {
 		return "", false
 	}
 	n := json.Number(strings.TrimSpace(s))
-	if n == "" {
-		return "", false
-	}
-	if _, err := n.Float64(); err != nil {
+	if !isJSONNumber(string(n)) {
 		return "", false
 	}
 	return n, true
+}
+
+// isJSONNumber reports whether s is a valid JSON number literal. Go's float
+// parser is looser than JSON: it also accepts NaN, Inf and a leading "+", none
+// of which a safe conversion may treat as a number.
+func isJSONNumber(s string) bool {
+	if s == "" {
+		return false
+	}
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+	var n json.Number
+	if err := dec.Decode(&n); err != nil {
+		return false
+	}
+	var trailing any
+	return dec.Decode(&trailing) == io.EOF
 }
 
 // isIntegral reports whether n denotes a whole number without losing anything.
