@@ -252,6 +252,12 @@ func Parse(raw []byte) (*Spec, error) {
 	if err := dec.Decode(spec); err != nil {
 		return nil, preflightf("contract document", "cannot parse: %v", err)
 	}
+	// A second value after the document means the file is not one contract;
+	// accepting the first would validate a document the author did not write.
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		return nil, preflightf("contract document", "has trailing data after the contract")
+	}
 	if err := spec.Validate(); err != nil {
 		return nil, err
 	}

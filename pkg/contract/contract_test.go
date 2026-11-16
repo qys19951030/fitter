@@ -848,3 +848,12 @@ func TestDeliverRejectsOnlyTheNonConformingRecordsInStrictMode(t *testing.T) {
 	assert.Equal(t, 3, se.Report.Summary.Total)
 	assert.Equal(t, 2, se.Report.Summary.Conforming)
 }
+
+func TestParseRejectsTrailingContent(t *testing.T) {
+	_, err := contract.Parse([]byte(`{"fields":{}} {"fields":{}}`))
+	require.Error(t, err)
+
+	var pe *contract.PreflightError
+	require.ErrorAs(t, err, &pe)
+	assert.Contains(t, err.Error(), "trailing data")
+}
