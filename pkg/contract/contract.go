@@ -722,8 +722,9 @@ func appendPathProblem(field, path string, raw json.RawMessage, required bool, p
 
 // Run is the package's entry point: it loads the contract, applies every
 // preflight check before annotating anything, annotates the batch, writes the
-// structured report, and returns the human summary. Nothing is written when a
-// preflight check fails, so a half-parsed contract never produces a report.
+// structured report (and the human summary alongside it), and returns them.
+// Nothing is written when a preflight check fails, so a half-parsed contract
+// never produces a report.
 //
 // When strict is set, any record that does not fully conform withholds the
 // whole batch from the returned records, but the report is still written with
