@@ -822,3 +822,27 @@ func TestTrailingBytesAfterAValueAreADefect(t *testing.T) {
 	assert.Equal(t, contract.SeverityDefect, got.Problems[0].Severity)
 	assert.Equal(t, `5 6`, string(got.Problems[0].Raw))
 }
+
+func TestDeliverRejectsOnlyTheNonConformingRecordsInStrictMode(t *testing.T) {
+	s := batchSpec(t)
+	records := []map[string]json.RawMessage{
+		record(t, map[string]any{"title": "a", "price": 1, "items": []any{1, 2, 3}}),
+		record(t, map[string]any{"title": "b", "price": 2, "items": []any{1}}),
+		record(t, map[string]any{"title": "c", "price": 3, "items": []any{1, 2, 3}}),
+	}
+	report := s.CheckAll(records)
+	assert.Equal(t, contract.Conforming, report.Records[0].Verdict)
+	assert.Equal(t, contract.Usable, report.Records[1].Verdict)
+	assert.Equal(t, contract.Conforming, report.Records[2].Verdict)
+
+	_, err := report.Deliver(true, records)
+	require.Error(t, err)
+
+	var se *contract.StrictError
+	require.ErrorAs(t, err, &se)
+	require.Len(t, se.Rejected, 1)
+	assert.Equal(t, 1, se.Rejected[0].Index)
+	// The summary the error carries is the full batch's, not a filtered one.
+	assert.Equal(t, 3, se.Report.Summary.Total)
+	assert.Equal(t, 2, se.Report.Summary.Conforming)
+}
