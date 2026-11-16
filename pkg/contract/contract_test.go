@@ -275,12 +275,14 @@ func TestANonRequiredMissingFieldKeepsTheRecordUsable(t *testing.T) {
 	assert.Equal(t, "price", got.Problems[0].Field)
 }
 
-func TestRequiredFieldProblemIsUnusableEvenIfConvertible(t *testing.T) {
+// A required field that is present but only recoverable is still usable;
+// requiredness makes absence fatal, not a safe conversion.
+func TestRequiredFieldStaysUsableWhenOnlyConvertible(t *testing.T) {
 	s := specWith(t, map[string]any{"price": map[string]any{"type": "number", "required": true}})
 	got := s.Check(record(t, map[string]any{"price": "10"}))
 
-	// "price" was present and only recoverable, so it is a mismatch: usable.
 	assert.Equal(t, contract.Usable, got.Verdict)
+	assert.Empty(t, got.Causes)
 
 	missing := s.Check(record(t, map[string]any{}))
 	assert.Equal(t, contract.Unusable, missing.Verdict)
