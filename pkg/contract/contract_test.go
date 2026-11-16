@@ -754,3 +754,34 @@ func TestGetFallsBackWhenIndexesAreNotStoredInOrder(t *testing.T) {
 	_, ok = report.Get(5)
 	assert.False(t, ok)
 }
+
+func TestAListInAStringIsCountedNotDoubleReported(t *testing.T) {
+	s := specWith(t, map[string]any{"items": map[string]any{"type": "array", "min_items": 3}})
+	got := s.Check(record(t, map[string]any{"items": `[1]`}))
+
+	require.Len(t, got.Problems, 2)
+	byKind := map[contract.ProblemKind]contract.Problem{}
+	for _, p := range got.Problems {
+		byKind[p.Kind] = p
+	}
+	assert.Equal(t, contract.SeverityWarning, byKind[contract.KindTypeMismatch].Severity)
+	assert.Equal(t, contract.KindItemCount, byKind[contract.KindItemCount].Kind)
+	assert.Equal(t, contract.Usable, got.Verdict)
+}
+
+func TestANonListIsReportedOnceNotTwice(t *testing.T) {
+	s := specWith(t, map[string]any{"items": map[string]any{"type": "array", "min_items": 3}})
+	got := s.Check(record(t, map[string]any{"items": "nope"}))
+
+	assert.Len(t, got.Problems, 1)
+	assert.Equal(t, contract.KindTypeMismatch, got.Problems[0].Kind)
+	assert.Equal(t, contract.SeverityDefect, got.Problems[0].Severity)
+}
+
+func TestItemCountWithoutADeclaredTypeStillReportsANonList(t *testing.T) {
+	s := specWith(t, map[string]any{"items": map[string]any{"min_items": 2}})
+	got := s.Check(record(t, map[string]any{"items": 3}))
+
+	require.Len(t, got.Problems, 1)
+	assert.Equal(t, contract.KindTypeMismatch, got.Problems[0].Kind)
+}

@@ -607,15 +607,27 @@ func ruleTypeLabel(rule *FieldRule) string {
 func checkItemCount(path string, rule *FieldRule, k jsonKind, v any, raw json.RawMessage, problems *[]Problem) {
 	items, ok := v.([]any)
 	if !ok || k != kindArray {
-		*problems = append(*problems, Problem{
-			Field:       path,
-			Kind:        KindTypeMismatch,
-			Severity:    SeverityDefect,
-			Required:    rule.Required,
-			Expectation: fmt.Sprintf("an array to check its item count, got %s", k),
-			Raw:         raw,
-		})
-		return
+		// A string holding a JSON array is exactly the recoverable case the
+		// type check already reported as a warning; count from the decoded
+		// array instead of raising a second, contradicting problem.
+		if decoded, parsed := parseStructuredString(k, v, kindArray); parsed {
+			items, ok = decoded.([]any)
+		}
+		if !ok {
+			// When the contract already demanded an array, the type check
+			// reported this value; do not report the same fault twice.
+			if rule.Type != TypeArray {
+				*problems = append(*problems, Problem{
+					Field:       path,
+					Kind:        KindTypeMismatch,
+					Severity:    SeverityDefect,
+					Required:    rule.Required,
+					Expectation: fmt.Sprintf("an array to check its item count, got %s", k),
+					Raw:         raw,
+				})
+			}
+			return
+		}
 	}
 	n := len(items)
 	bad := (rule.MinItems > 0 && n < rule.MinItems) || (rule.MaxItems > 0 && n > rule.MaxItems)
